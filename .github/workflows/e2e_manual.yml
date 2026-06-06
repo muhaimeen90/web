@@ -37,18 +37,29 @@ jobs:
           done
 
       - name: Start oCIS (Tika is now ready)
-        run:  OCIS_IMAGE=owncloud/ocis:latest docker compose up -d ocis
+        run: docker compose up -d ocis
 
       - name: Wait for oCIS
         run: |
+          echo "Waiting for oCIS HTTP to respond..."
           for i in {1..30}; do
             status=$(curl -ksSo /dev/null -w "%{http_code}" "https://localhost:9200" 2>/dev/null)
             if [ "$status" != "000" ]; then
-              echo "oCIS is up ✅ (HTTP $status)"
+              echo "oCIS HTTP is up (HTTP $status)"
               break
             fi
-            [ $i -eq 30 ] && echo "❌ oCIS failed to start" && docker compose logs ocis && exit 1
-            echo "Waiting... ($i/30)"
+            [ $i -eq 30 ] && echo "❌ oCIS never responded" && docker compose logs ocis && exit 1
+            echo "Waiting for HTTP... ($i/30)"
+            sleep 5
+          done
+          echo "Waiting for oCIS auth to be ready..."
+          for i in {1..24}; do
+            if curl -ksfSL -u admin:admin "https://localhost:9200/ocs/v1.php/config" | grep -q "owncloud"; then
+              echo "oCIS auth is ready ✅"
+              break
+            fi
+            [ $i -eq 24 ] && echo "❌ oCIS auth never became ready" && docker compose logs ocis && exit 1
+            echo "Waiting for auth... ($i/24)"
             sleep 5
           done
 
