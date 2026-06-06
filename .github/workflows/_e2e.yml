@@ -13,6 +13,7 @@ on:
         type: string
         required: false
         default: ''
+  workflow_dispatch:  
 
 jobs:
   e2e:
