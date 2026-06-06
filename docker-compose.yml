@@ -56,7 +56,7 @@ x-ocis-server: &ocis-service
 
     # TIKA
     SEARCH_EXTRACTOR_TYPE: 'tika'
-    SEARCH_EXTRACTOR_TIKA_TIKA_URL: 'http://host.docker.internal:9998'
+    SEARCH_EXTRACTOR_TIKA_TIKA_URL: 'http://tika:9998'
     SEARCH_EXTRACTOR_CS3SOURCE_INSECURE: 'true'
 
     # App Provider
