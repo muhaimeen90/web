@@ -37,7 +37,7 @@ jobs:
           done
 
       - name: Start oCIS (Tika is now ready)
-        run: docker compose up -d ocis
+        run: OCIS_IMAGE=owncloud/ocis:latest docker compose up -d ocis
 
       - name: Wait for oCIS
         run: |
