@@ -1,0 +1,46 @@
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+    branches: [main, master]
+  workflow_dispatch:
+
+jobs:
+  e2e:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - run: pnpm install
+
+      - run: pnpm build           
+
+      - run: docker compose up ocis &
+
+      - run: echo "127.0.0.1 host.docker.internal" | sudo tee -a /etc/hosts
+
+      - name: Wait for oCIS
+        run: until curl -sk https://localhost:9200/ocs/v1.php/config | grep -q owncloud; do sleep 5; done
+
+      - name: Run E2E tests
+        id: e2e
+        run: pnpm test:e2e:playwright
+        env:
+          NODE_TLS_REJECT_UNAUTHORIZED: 0
+          HEADLESS: true
+          CI: true
+
+      - name: Upload traces on failure
+        if: failure() && steps.e2e.conclusion == 'failure'
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-traces
+          path: reports/e2e/**/*.zip
+          retention-days: 7
