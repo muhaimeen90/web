@@ -17,31 +17,39 @@ jobs:
         with:
           node-version: 22
           cache: pnpm
-      
+
       - run: pnpm install
 
       - run: pnpm build
 
-      - run: OCIS_IMAGE=owncloud/ocis:latest docker compose up -d ocis
+      - name: Start Tika and wait for it to be ready
+        run: |
+          docker compose up -d tika traefik
+          echo "Waiting for Tika JVM to initialize..."
+          for i in {1..24}; do
+            if curl -sf "http://localhost:9998/" > /dev/null 2>&1; then
+              echo "Tika is ready ✅"
+              break
+            fi
+            [ $i -eq 24 ] && echo "❌ Tika failed to start" && docker compose logs tika && exit 1
+            echo "Waiting... ($i/24)"
+            sleep 5
+          done
 
-      - run: echo "127.0.0.1 host.docker.internal" | sudo tee -a /etc/hosts
+      - name: Start oCIS (Tika is now ready)
+        run:  OCIS_IMAGE=owncloud/ocis:latest docker compose up -d ocis
 
       - name: Wait for oCIS
         run: |
           for i in {1..30}; do
-            docker compose ps
-            docker compose logs --tail=10 ocis
-            if curl -kfsSL "https://localhost:9200" > /dev/null 2>&1; then
-              echo "oCIS is up ✅"
+            status=$(curl -ksSo /dev/null -w "%{http_code}" "https://localhost:9200" 2>/dev/null)
+            if [ "$status" != "000" ]; then
+              echo "oCIS is up ✅ (HTTP $status)"
               break
             fi
-            echo "Retrying in 5s... ($i/30)"
+            [ $i -eq 30 ] && echo "❌ oCIS failed to start" && docker compose logs ocis && exit 1
+            echo "Waiting... ($i/30)"
             sleep 5
-            if [ $i -eq 30 ]; then
-              echo "❌ oCIS failed to start. Full logs:"
-              docker compose logs ocis
-              exit 1
-            fi
           done
 
       - name: Run E2E tests
