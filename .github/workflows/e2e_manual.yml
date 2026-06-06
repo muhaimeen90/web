@@ -22,7 +22,7 @@ jobs:
 
       - run: pnpm build           
 
-      - run: docker compose up ocis &
+      - run: OCIS_IMAGE=owncloud/ocis:latest docker compose up ocis &
 
       - run: echo "127.0.0.1 host.docker.internal" | sudo tee -a /etc/hosts
 
