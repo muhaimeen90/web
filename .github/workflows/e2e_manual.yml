@@ -17,17 +17,32 @@ jobs:
         with:
           node-version: 22
           cache: pnpm
+
+      - run: OCIS_IMAGE=owncloud/ocis:latest docker compose up -d ocis
       
       - run: pnpm install
 
       - run: pnpm build           
 
-      - run: OCIS_IMAGE=owncloud/ocis:latest docker compose up -d ocis
-      
       - run: echo "127.0.0.1 host.docker.internal" | sudo tee -a /etc/hosts
 
       - name: Wait for oCIS
-        run: until curl -sk https://localhost:9200/ocs/v1.php/config | grep -q owncloud; do sleep 5; done
+        run: |
+          for i in {1..30}; do
+            docker compose ps
+            docker compose logs --tail=10 ocis
+            if curl -kfsSL "https://localhost:9200" > /dev/null 2>&1; then
+              echo "oCIS is up ✅"
+              break
+            fi
+            echo "Retrying in 5s... ($i/30)"
+            sleep 5
+            if [ $i -eq 30 ]; then
+              echo "❌ oCIS failed to start. Full logs:"
+              docker compose logs ocis
+              exit 1
+            fi
+          done
 
       - name: Run E2E tests
         id: e2e
