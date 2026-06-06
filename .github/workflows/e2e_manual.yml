@@ -18,11 +18,11 @@ jobs:
           node-version: 22
           cache: pnpm
 
+      - run: OCIS_IMAGE=owncloud/ocis:latest docker compose up -d ocis
+      
       - run: pnpm install
 
       - run: pnpm build           
-
-      - run: OCIS_IMAGE=owncloud/ocis:latest docker compose up ocis &
 
       - run: echo "127.0.0.1 host.docker.internal" | sudo tee -a /etc/hosts
 
