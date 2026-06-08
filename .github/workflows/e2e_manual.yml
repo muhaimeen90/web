@@ -22,6 +22,9 @@ jobs:
 
       - run: pnpm build
 
+      - name: Map host.docker.internal to localhost
+        run: echo "127.0.0.1 host.docker.internal" | sudo tee -a /etc/hosts
+
       - name: Start Tika and wait for it to be ready
         run: |
           docker compose up -d tika traefik
@@ -35,7 +38,6 @@ jobs:
             echo "Waiting... ($i/24)"
             sleep 5
           done
-
       - name: Start oCIS (Tika is now ready)
         run: OCIS_IMAGE=owncloud/ocis:latest docker compose up -d ocis
 
@@ -43,7 +45,7 @@ jobs:
         run: |
           echo "Waiting for oCIS HTTP to respond..."
           for i in {1..30}; do
-            status=$(curl -ksSo /dev/null -w "%{http_code}" "https://localhost:9200" 2>/dev/null)
+            status=$(curl -ksSo /dev/null -w "%{http_code}" "https://host.docker.internal:9200" 2>/dev/null)
             if [ "$status" != "000" ]; then
               echo "oCIS HTTP is up (HTTP $status)"
               break
@@ -54,7 +56,7 @@ jobs:
           done
           echo "Waiting for oCIS auth to be ready..."
           for i in {1..24}; do
-            if curl -ksfSL -u admin:admin "https://localhost:9200/ocs/v1.php/config" | grep -q "owncloud"; then
+            if curl -ksfSL -u admin:admin "https://host.docker.internal:9200/ocs/v1.php/config" | grep -q "owncloud"; then
               echo "oCIS auth is ready ✅"
               break
             fi
@@ -62,7 +64,6 @@ jobs:
             echo "Waiting for auth... ($i/24)"
             sleep 5
           done
-
       - name: Run E2E tests
         id: e2e
         run: pnpm test:e2e:playwright
