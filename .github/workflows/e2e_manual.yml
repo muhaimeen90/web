@@ -39,29 +39,27 @@ jobs:
             sleep 5
           done
       - name: Start oCIS (Tika is now ready)
-        run: OCIS_IMAGE=owncloud/ocis:latest docker compose up -d ocis
+        run: OCIS_IMAGE=owncloud/ocis:latest OCIS_LOG_LEVEL=info docker compose up -d ocis
 
       - name: Wait for oCIS
         run: |
-          echo "Waiting for oCIS HTTP to respond..."
-          for i in {1..30}; do
-            status=$(curl -ksSo /dev/null -w "%{http_code}" "https://host.docker.internal:9200" 2>/dev/null)
-            if [ "$status" != "000" ]; then
-              echo "oCIS HTTP is up (HTTP $status)"
+          echo "Waiting for oCIS to become fully ready (proxy + backend services)..."
+          # oCIS returns 404 until traefik has the route, then 502 while its
+          # internal services register, and finally 200 once fully ready.
+          # On a 2-vCPU runner the warm-up can take several minutes.
+          for i in {1..60}; do
+            status=$(curl -ksSo /dev/null -w "%{http_code}" \
+              -u admin:admin "https://host.docker.internal:9200/ocs/v1.php/config" 2>/dev/null)
+            if [ "$status" = "200" ]; then
+              echo "oCIS auth is ready ✅ (HTTP 200)"
               break
             fi
-            [ $i -eq 30 ] && echo "❌ oCIS never responded" && docker compose logs ocis && exit 1
-            echo "Waiting for HTTP... ($i/30)"
-            sleep 5
-          done
-          echo "Waiting for oCIS auth to be ready..."
-          for i in {1..24}; do
-            if curl -ksfSL -u admin:admin "https://host.docker.internal:9200/ocs/v1.php/config" | grep -q "owncloud"; then
-              echo "oCIS auth is ready ✅"
-              break
+            if [ $i -eq 60 ]; then
+              echo "❌ oCIS never became ready (last status: HTTP $status)"
+              docker compose logs --no-color --tail=all ocis
+              exit 1
             fi
-            [ $i -eq 24 ] && echo "❌ oCIS auth never became ready" && docker compose logs ocis && exit 1
-            echo "Waiting for auth... ($i/24)"
+            echo "Waiting for oCIS... ($i/60, HTTP $status)"
             sleep 5
           done
       - name: Run E2E tests
