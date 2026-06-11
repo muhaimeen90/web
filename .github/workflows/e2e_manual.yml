@@ -26,7 +26,12 @@ jobs:
         # pnpm exec uses the workspace-pinned playwright (1.59.1) so the browser
         # revision matches what the test run expects; npx can fetch a different
         # version and install mismatched browser binaries.
-        run: pnpm exec playwright install --with-deps chromium
+        #
+        # The tests run headless (HEADLESS=true) and launch chrome-headless-shell,
+        # so install ONLY that target. Installing the full `chromium` target also
+        # pulls the 170 MiB headed Chrome build + ffmpeg, which are unused here and
+        # add download time / CDN-stall surface (that extra download is what hangs).
+        run: pnpm exec playwright install --with-deps chromium-headless-shell
 
       - name: Map host.docker.internal to localhost
         run: echo "127.0.0.1 host.docker.internal" | sudo tee -a /etc/hosts
