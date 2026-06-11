@@ -64,11 +64,18 @@ jobs:
           done
       - name: Run E2E tests
         id: e2e
-        run: pnpm test:e2e:playwright
+        # chromium only, to match the upstream _e2e.yml (which runs BROWSER=chromium)
+        run: pnpm test:e2e:playwright -- --project=chromium
         env:
           NODE_TLS_REJECT_UNAUTHORIZED: 0
           HEADLESS: true
           CI: true
+          BROWSER: chromium
+          # retry flaky tests once, like the upstream _e2e.yml
+          RETRY: 1
+          # a11y assertions are wired into the shared action helpers and run on
+          # every UI step; the upstream _e2e.yml skips them, so mirror that here.
+          SKIP_A11Y_TESTS: true
 
       - name: Upload traces on failure
         if: failure() && steps.e2e.conclusion == 'failure'
