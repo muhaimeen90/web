@@ -22,16 +22,44 @@ jobs:
 
       - run: pnpm build
 
+      # Cache the downloaded browser so it is fetched from cdn.playwright.dev at
+      # most once; after a successful run this restore makes the install instant
+      # and immune to CDN stalls on later runs.
+      - name: Cache Playwright browsers
+        id: playwright-cache
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}
+
       - name: Install Playwright chromium browser
         # pnpm exec uses the workspace-pinned playwright (1.59.1) so the browser
         # revision matches what the test run expects; npx can fetch a different
         # version and install mismatched browser binaries.
         #
         # The tests run headless (HEADLESS=true) and launch chrome-headless-shell,
-        # so install ONLY that target. Installing the full `chromium` target also
-        # pulls the 170 MiB headed Chrome build + ffmpeg, which are unused here and
-        # add download time / CDN-stall surface (that extra download is what hangs).
-        run: pnpm exec playwright install --with-deps chromium-headless-shell
+        # so install ONLY that target (skips the unused 170 MiB headed Chrome).
+        #
+        # The download from cdn.playwright.dev can stall on a CI runner (it tends
+        # to hang on the artifact after the first one, a connection-reuse stall).
+        # Each attempt is bounded by `timeout` and retried with a fresh connection,
+        # and the step itself is hard-capped so it can never hang for hours.
+        timeout-minutes: 15
+        run: |
+          # OS deps are pre-installed on ubuntu-latest; install them once (best
+          # effort) so the retried browser download below is a pure network op.
+          pnpm exec playwright install-deps chromium-headless-shell || true
+          for attempt in 1 2 3 4 5; do
+            echo "Playwright browser download attempt $attempt/5..."
+            if timeout 180 pnpm exec playwright install chromium-headless-shell; then
+              echo "✅ Playwright browser installed"
+              exit 0
+            fi
+            echo "⚠️ attempt $attempt stalled or failed; retrying with a fresh connection..."
+            sleep 5
+          done
+          echo "❌ Playwright browser install failed after 5 attempts"
+          exit 1
 
       - name: Map host.docker.internal to localhost
         run: echo "127.0.0.1 host.docker.internal" | sudo tee -a /etc/hosts
